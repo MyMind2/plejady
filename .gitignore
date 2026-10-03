@@ -1,0 +1,12 @@
+node_modules
+.next
+.env*.local
+.env
+!.env.example
+coverage
+playwright-report
+test-results
+supabase/.temp
+backups
+*.sql.gz
+*.tsbuildinfo
