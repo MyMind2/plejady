@@ -1,6 +1,8 @@
 # Plejády
 
-Bezpečná registrace pro jednodenní školní přednáškový den: Next.js, Supabase (PostgreSQL/Auth/Storage), Vercel a volitelně Resend. Databázové RPC je autoritou pro kapacity; stránka nepoužívá Realtime.
+Jednoduchá a bezpečná registrace pro jednodenní školní přednáškový den. Aplikace používá Next.js, Supabase (PostgreSQL a Auth) a Vercel. Databázové RPC je autoritou pro kapacity; stránka nepoužívá Realtime.
+
+Každá z 20 sessions má před otevřením registrace přidělenou jednu z pěti místností. Kapacita přidělené místnosti je pevnou kapacitou session.
 
 ## Lokální spuštění
 
@@ -10,4 +12,4 @@ Bezpečná registrace pro jednodenní školní přednáškový den: Next.js, Sup
 
 Kontroly: `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`. Databázové testy potřebují Docker a lokální Supabase: `npm run db:test`.
 
-Podrobné návody: [Supabase](docs/setup-supabase.md), [Google OAuth](docs/setup-google-oauth.md), [e-mail](docs/setup-email.md), [Vercel](docs/setup-vercel.md), [zálohy](docs/backup.md), [zátěž](docs/load-testing.md), [spuštění](docs/launch-checklist.md) a [plán pro den akce](docs/event-day-fallback.md).
+Podrobné návody: [Supabase](docs/setup-supabase.md), [Google OAuth](docs/setup-google-oauth.md), [Vercel](docs/setup-vercel.md), [zálohy](docs/backup.md), [zátěž](docs/load-testing.md), [spuštění](docs/launch-checklist.md) a [plán pro den akce](docs/event-day-fallback.md).

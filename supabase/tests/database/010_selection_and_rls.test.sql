@@ -1,16 +1,25 @@
 begin;
-select plan(15);
+select plan(21);
 select is((select count(*) from public.blocks where event_id='10000000-0000-4000-8000-000000000001'),4::bigint,'seed has exactly four blocks');
 select is((select count(*) from public.sessions where event_id='10000000-0000-4000-8000-000000000001'),20::bigint,'seed has exactly twenty sessions');
 select is((select min(session_count)=5 and max(session_count)=5 from (select count(*) session_count from public.sessions where event_id='10000000-0000-4000-8000-000000000001' group by block_id) counts),true,'each seeded block has five sessions');
+select is((select count(*) from public.sessions where event_id='10000000-0000-4000-8000-000000000001' and room_id is not null),20::bigint,'every session has a predetermined room');
+select is((select min(room_count)=5 and max(room_count)=5 from (select count(distinct room_id) room_count from public.sessions where event_id='10000000-0000-4000-8000-000000000001' and active group by block_id) counts),true,'each block uses five distinct rooms');
+select is(public.event_registration_ready('10000000-0000-4000-8000-000000000001'),true,'seeded event is ready for registration');
+update public.events set registration_open_at=null where id='10000000-0000-4000-8000-000000000001';
+update public.rooms set active=false where id='10000000-0000-4000-8000-000000002001';
+select is(public.event_registration_ready('10000000-0000-4000-8000-000000000001'),false,'inactive assigned room makes event unready');
+select throws_ok(
+  $$update public.events set registration_open_at=now() where id='10000000-0000-4000-8000-000000000001'$$,
+  'P0001','EVENT_CONFIGURATION_INVALID','registration cannot open with an invalid room assignment'
+);
+update public.rooms set active=true where id='10000000-0000-4000-8000-000000002001';
+update public.events set registration_open_at=now()-interval '1 hour' where id='10000000-0000-4000-8000-000000000001';
 
--- auth.users rows are needed because student_profiles intentionally has a real FK.
 insert into auth.users (id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at) values
 ('20000000-0000-4000-8000-000000000001','authenticated','authenticated','one@student.alej.cz','',now(),'{}','{}',now(),now()),
 ('20000000-0000-4000-8000-000000000002','authenticated','authenticated','two@student.alej.cz','',now(),'{}','{}',now(),now()),
 ('20000000-0000-4000-8000-000000000003','authenticated','authenticated','three@student.alej.cz','',now(),'{}','{}',now(),now()),
-('20000000-0000-4000-8000-000000000004','authenticated','authenticated','four@student.alej.cz','',now(),'{}','{}',now(),now()),
-('20000000-0000-4000-8000-000000000005','authenticated','authenticated','five@student.alej.cz','',now(),'{}','{}',now(),now()),
 ('20000000-0000-4000-8000-000000000006','authenticated','authenticated','outside@gmail.com','',now(),'{}','{}',now(),now());
 
 set local role authenticated;
@@ -24,8 +33,7 @@ select is((public.select_session('10000000-0000-4000-8000-000000005002')->>'code
 select is((select session_id from public.student_selections where student_id='20000000-0000-4000-8000-000000000001' and block_id='10000000-0000-4000-8000-000000001001'),'10000000-0000-4000-8000-000000005002'::uuid,'switch replaces old choice atomically');
 
 reset role;
-update public.rooms set capacity=1 where event_id='10000000-0000-4000-8000-000000000001' and not is_large_room;
-update public.rooms set capacity=2 where event_id='10000000-0000-4000-8000-000000000001' and is_large_room;
+update public.rooms set capacity=1 where id='10000000-0000-4000-8000-000000002001';
 set local role authenticated;
 select set_config('request.jwt.claim.sub','20000000-0000-4000-8000-000000000002',true);
 select set_config('request.jwt.claims','{"sub":"20000000-0000-4000-8000-000000000002","email":"two@student.alej.cz"}',true);
@@ -33,21 +41,17 @@ select public.select_session('10000000-0000-4000-8000-000000005001');
 select set_config('request.jwt.claim.sub','20000000-0000-4000-8000-000000000003',true);
 select set_config('request.jwt.claims','{"sub":"20000000-0000-4000-8000-000000000003","email":"three@student.alej.cz"}',true);
 select public.select_session('10000000-0000-4000-8000-000000005003');
-select set_config('request.jwt.claim.sub','20000000-0000-4000-8000-000000000004',true);
-select set_config('request.jwt.claims','{"sub":"20000000-0000-4000-8000-000000000004","email":"four@student.alej.cz"}',true);
-select public.select_session('10000000-0000-4000-8000-000000005001');
-reset role;
-select is((select winning_session_id from public.block_large_room_claims where block_id='10000000-0000-4000-8000-000000001001'),'10000000-0000-4000-8000-000000005001'::uuid,'S+1 session claims large room');
-set local role authenticated;
-select set_config('request.jwt.claim.sub','20000000-0000-4000-8000-000000000003',true);
-select set_config('request.jwt.claims','{"sub":"20000000-0000-4000-8000-000000000003","email":"three@student.alej.cz"}',true);
-select throws_ok($$select public.select_session('10000000-0000-4000-8000-000000005001')$$,'P0001','SWITCH_TARGET_FULL','full switch is rejected');
+select throws_ok($$select public.select_session('10000000-0000-4000-8000-000000005001')$$,'P0001','SWITCH_TARGET_FULL','full target room rejects switch');
 select is((select session_id from public.student_selections where student_id='20000000-0000-4000-8000-000000000003' and block_id='10000000-0000-4000-8000-000000001001'),'10000000-0000-4000-8000-000000005003'::uuid,'failed switch retains old selection');
 
 reset role;
 update public.events set registration_close_at=now()-interval '1 second' where id='10000000-0000-4000-8000-000000000001';
 set local role authenticated;
 select throws_ok($$select public.select_session('10000000-0000-4000-8000-000000005006')$$,'P0001','REGISTRATION_CLOSED','database enforces close time');
+select set_config('request.jwt.claim.sub','20000000-0000-4000-8000-000000000001',true);
+select set_config('request.jwt.claims','{"sub":"20000000-0000-4000-8000-000000000001","email":"one@student.alej.cz"}',true);
+select is_empty($$select * from public.student_profiles where user_id='20000000-0000-4000-8000-000000000002'$$,'student cannot read another student profile');
+select is_empty($$select * from public.student_selections where student_id='20000000-0000-4000-8000-000000000002'$$,'student cannot read another student selection');
 reset role;
 set local role anon;
 select set_config('request.jwt.claim.sub','',true);
