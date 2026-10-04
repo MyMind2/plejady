@@ -2,6 +2,8 @@
 
 - [ ] Supabase běží a je vytvořena manuální záloha.
 - [ ] Produkční HTTPS, Google OAuth a admin fungují; Gmail je odmítnut.
+- [ ] Přihlášení osmimístným OTP funguje se skutečným účtem `@student.alej.cz`.
+- [ ] Supabase OTP šablona používá `{{ .Token }}` a Brevo SMTP má dostatečnou kvótu.
 - [ ] Datum a Europe/Prague časy webu, otevření i uzavření jsou správně.
 - [ ] Existují přesně 4 bloky: 08:30–09:30, 10:00–11:00, 11:30–12:30, 13:00–14:00.
 - [ ] Každý blok má 5 aktivních sessions a používá 5 různých aktivních místností.

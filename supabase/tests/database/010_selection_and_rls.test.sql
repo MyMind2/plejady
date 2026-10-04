@@ -1,5 +1,5 @@
 begin;
-select plan(21);
+select plan(31);
 select is((select count(*) from public.blocks where event_id='10000000-0000-4000-8000-000000000001'),4::bigint,'seed has exactly four blocks');
 select is((select count(*) from public.sessions where event_id='10000000-0000-4000-8000-000000000001'),20::bigint,'seed has exactly twenty sessions');
 select is((select min(session_count)=5 and max(session_count)=5 from (select count(*) session_count from public.sessions where event_id='10000000-0000-4000-8000-000000000001' group by block_id) counts),true,'each seeded block has five sessions');
@@ -15,6 +15,64 @@ select throws_ok(
 );
 update public.rooms set active=true where id='10000000-0000-4000-8000-000000002001';
 update public.events set registration_open_at=now()-interval '1 hour' where id='10000000-0000-4000-8000-000000000001';
+
+select throws_ok(
+  $$select public.register_guest(null,'blank-name@example.test')$$,
+  'P0001','INVALID_GUEST_NAME','guest full name is required'
+);
+select is(
+  (public.register_guest('  Jana Nováková  ','Guest@Example.Test')->>'code'),
+  'OK','guest registration accepts a name and email from any domain'
+);
+select is(
+  (select full_name from public.guests where normalized_email='guest@example.test'),
+  'Jana Nováková','guest full name is trimmed before storage'
+);
+select is(
+  (select normalized_email from public.guests where normalized_email='guest@example.test'),
+  'guest@example.test','guest email is trimmed and normalized before storage'
+);
+select throws_ok(
+  $$select public.register_guest('Jiný host','  GUEST@example.test  ')$$,
+  'P0001','GUEST_DUPLICATE','normalized duplicate guest email is rejected'
+);
+do $$
+begin
+  for i in 2..30 loop
+    perform public.register_guest(format('Host %s',i),format('limit%s@example.test',i));
+  end loop;
+end $$;
+select throws_ok(
+  $$select public.register_guest('Host 31','limit31@example.test')$$,
+  'P0001','GUEST_LIMIT_REACHED','guest registration rejects the thirty-first active guest'
+);
+select is(
+  (select count(*) from public.guests where event_id='10000000-0000-4000-8000-000000000001' and status='active'),
+  30::bigint,'guest registration stores at most thirty active guests'
+);
+set local role anon;
+select set_config('request.jwt.claim.sub','',true);
+select set_config('request.jwt.claims','{}',true);
+select is_empty('select * from public.guests','anonymous users cannot read the guest list');
+reset role;
+delete from public.guests where event_id='10000000-0000-4000-8000-000000000001';
+
+update public.events set registration_open_at=null where id='10000000-0000-4000-8000-000000000001';
+select throws_ok(
+  $$select public.register_guest('Host bez události','closed@example.test')$$,
+  'P0001','GUEST_REGISTRATION_NOT_OPEN','guest registration requires one currently open event'
+);
+update public.events set registration_open_at=now()-interval '1 hour' where id='10000000-0000-4000-8000-000000000001';
+
+alter table public.events disable trigger event_must_be_ready_before_registration;
+insert into public.events(id,name,event_date,site_public_at,registration_open_at,registration_close_at,guest_limit)
+values('10000000-0000-4000-8000-000000000002','Unexpected second open event',current_date,now()-interval '1 day',now()-interval '1 hour',now()+interval '1 hour',30);
+alter table public.events enable trigger event_must_be_ready_before_registration;
+select throws_ok(
+  $$select public.register_guest('Host s nejasnou událostí','ambiguous@example.test')$$,
+  'P0001','GUEST_EVENT_AMBIGUOUS','guest registration fails safely when multiple events are open'
+);
+delete from public.events where id='10000000-0000-4000-8000-000000000002';
 
 insert into auth.users (id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at) values
 ('20000000-0000-4000-8000-000000000001','authenticated','authenticated','one@student.alej.cz','',now(),'{}','{}',now(),now()),

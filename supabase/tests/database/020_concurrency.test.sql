@@ -31,15 +31,15 @@ select is((select count(*) from public.student_selections where session_id='1000
 -- Concurrent duplicate guest attempts consume one place only.
 select dblink_connect('dup_a','host=supabase_db_plejady port=5432 dbname=postgres user=supabase_admin password=postgres sslmode=disable');
 select dblink_connect('dup_b','host=supabase_db_plejady port=5432 dbname=postgres user=supabase_admin password=postgres sslmode=disable');
-select dblink_send_query('dup_a',$$do $body$ begin perform pg_sleep(0.2); begin perform public.register_guest('10000000-0000-4000-8000-000000000001','duplicate@example.test'); exception when others then null; end; end $body$;$$);
-select dblink_send_query('dup_b',$$do $body$ begin perform pg_sleep(0.2); begin perform public.register_guest('10000000-0000-4000-8000-000000000001','DUPLICATE@example.test'); exception when others then null; end; end $body$;$$);
+select dblink_send_query('dup_a',$$do $body$ begin perform pg_sleep(0.2); begin perform public.register_guest('První host','duplicate@example.test'); exception when others then null; end; end $body$;$$);
+select dblink_send_query('dup_b',$$do $body$ begin perform pg_sleep(0.2); begin perform public.register_guest('Druhý host','DUPLICATE@example.test'); exception when others then null; end; end $body$;$$);
 select * from dblink_get_result('dup_a') as t(result text); select * from dblink_get_result('dup_b') as t(result text);
 select * from dblink_get_result('dup_a') as t(result text); select * from dblink_get_result('dup_b') as t(result text);
 select dblink_disconnect('dup_a'); select dblink_disconnect('dup_b');
 select is((select count(*) from public.guests where event_id='10000000-0000-4000-8000-000000000001' and normalized_email='duplicate@example.test'),1::bigint,'concurrent duplicate guest email consumes one place');
 delete from public.guests where normalized_email='duplicate@example.test';
 
-do $$ declare i integer; begin for i in 1..32 loop perform dblink_connect('guest'||i,'host=supabase_db_plejady port=5432 dbname=postgres user=supabase_admin password=postgres sslmode=disable'); perform dblink_send_query('guest'||i,format($q$do $body$ begin perform pg_sleep(0.2); begin perform public.register_guest('10000000-0000-4000-8000-000000000001',%L); exception when others then null; end; end $body$;$q$,format('guest%s@example.test',i))); end loop; for i in 1..32 loop perform * from dblink_get_result('guest'||i) as t(result text); perform * from dblink_get_result('guest'||i) as t(result text); perform dblink_disconnect('guest'||i); end loop; end $$;
+do $$ declare i integer; begin for i in 1..32 loop perform dblink_connect('guest'||i,'host=supabase_db_plejady port=5432 dbname=postgres user=supabase_admin password=postgres sslmode=disable'); perform dblink_send_query('guest'||i,format($q$do $body$ begin perform pg_sleep(0.2); begin perform public.register_guest(%L,%L); exception when others then null; end; end $body$;$q$,format('Host %s',i),format('guest%s@example.test',i))); end loop; for i in 1..32 loop perform * from dblink_get_result('guest'||i) as t(result text); perform * from dblink_get_result('guest'||i) as t(result text); perform dblink_disconnect('guest'||i); end loop; end $$;
 select is((select count(*) from public.guests where event_id='10000000-0000-4000-8000-000000000001' and status='active'),30::bigint,'32 overlapping unique guest attempts fill exactly 30 places without overflow');
 select * from finish();
 
