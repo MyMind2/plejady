@@ -268,6 +268,7 @@ export type Database = {
         Row: {
           active: boolean;
           block_id: string;
+          capacity_override: number | null;
           event_id: string;
           id: string;
           lecture_id: string;
@@ -276,6 +277,7 @@ export type Database = {
         Insert: {
           active?: boolean;
           block_id: string;
+          capacity_override?: number | null;
           event_id: string;
           id?: string;
           lecture_id: string;
@@ -284,6 +286,7 @@ export type Database = {
         Update: {
           active?: boolean;
           block_id?: string;
+          capacity_override?: number | null;
           event_id?: string;
           id?: string;
           lecture_id?: string;

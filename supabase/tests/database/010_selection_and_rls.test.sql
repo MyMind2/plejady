@@ -1,11 +1,43 @@
 begin;
-select plan(39);
+select plan(46);
 select is((select count(*) from public.blocks where event_id='10000000-0000-4000-8000-000000000001'),4::bigint,'seed has exactly four blocks');
 select is((select count(*) from public.sessions where event_id='10000000-0000-4000-8000-000000000001'),20::bigint,'seed has exactly twenty sessions');
 select is((select min(session_count)=5 and max(session_count)=5 from (select count(*) session_count from public.sessions where event_id='10000000-0000-4000-8000-000000000001' group by block_id) counts),true,'each seeded block has five sessions');
 select is((select count(*) from public.sessions where event_id='10000000-0000-4000-8000-000000000001' and room_id is not null),20::bigint,'every session has a predetermined room');
 select is((select min(room_count)=5 and max(room_count)=5 from (select count(distinct room_id) room_count from public.sessions where event_id='10000000-0000-4000-8000-000000000001' and active group by block_id) counts),true,'each block uses five distinct rooms');
 select is(public.event_registration_ready('10000000-0000-4000-8000-000000000001'),true,'seeded event is ready for registration');
+select is(
+  (select bool_and(capacity=80) from public.rooms where event_id='10000000-0000-4000-8000-000000000001'),
+  true,'all seeded rooms use the normal capacity of eighty'
+);
+select col_has_check('public','sessions','capacity_override','session capacity override has a database check constraint');
+select is(
+  (select capacity_override from public.sessions where id='10000000-0000-4000-8000-000000005001'),
+  null::integer,'normal session stores no capacity override'
+);
+select is(
+  (select capacity from public.session_availability('10000000-0000-4000-8000-000000000001') where session_id='10000000-0000-4000-8000-000000005001'),
+  80,'normal session with null override uses room capacity'
+);
+select is(
+  (select availability.capacity
+   from public.session_availability('10000000-0000-4000-8000-000000000001') availability
+   join public.sessions s on s.id=availability.session_id
+   join public.blocks b on b.id=s.block_id
+   join public.rooms r on r.id=s.room_id
+   join public.lectures l on l.id=s.lecture_id
+   join public.lecturers lecturer on lecturer.id=l.lecturer_id
+   where lecturer.name='Přemek Štenc' and b.display_order=1 and r.room_number='102'),
+  40,'Přemek Štenc session in block one and room 102 uses capacity forty'
+);
+select is(
+  (select availability.capacity
+   from public.session_availability('10000000-0000-4000-8000-000000000001') availability
+   join public.sessions s on s.id=availability.session_id
+   join public.rooms r on r.id=s.room_id
+   where r.room_number='102' and s.id='10000000-0000-4000-8000-000000005012'),
+  80,'another session in room 102 still uses room capacity eighty'
+);
 update public.events set registration_open_at=null where id='10000000-0000-4000-8000-000000000001';
 update public.rooms set active=false where id='10000000-0000-4000-8000-000000002001';
 select is(public.event_registration_ready('10000000-0000-4000-8000-000000000001'),false,'inactive assigned room makes event unready');
@@ -124,18 +156,26 @@ select is((public.select_session('10000000-0000-4000-8000-000000005002')->>'code
 select is((select session_id from public.student_selections where student_id='20000000-0000-4000-8000-000000000001' and block_id='10000000-0000-4000-8000-000000001001'),'10000000-0000-4000-8000-000000005002'::uuid,'switch replaces old choice atomically');
 
 reset role;
-update public.rooms set capacity=1 where id='10000000-0000-4000-8000-000000002001';
+insert into auth.users (id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
+select ('21000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'authenticated','authenticated',format('filler%s@student.alej.cz',n),'',now(),'{}','{}',now(),now()
+from generate_series(1,39) n;
+insert into public.student_profiles(user_id,email,display_name,class_name)
+select id,email,split_part(email,'@',1),'Kvinta A' from auth.users
+where id between '21000000-0000-4000-8000-000000000001'::uuid and '21000000-0000-4000-8000-000000000039'::uuid;
+insert into public.student_selections(student_id,block_id,session_id)
+select id,'10000000-0000-4000-8000-000000001001','10000000-0000-4000-8000-000000005002' from auth.users
+where id between '21000000-0000-4000-8000-000000000001'::uuid and '21000000-0000-4000-8000-000000000039'::uuid;
+select is(
+  (select count(*) from public.student_selections where session_id='10000000-0000-4000-8000-000000005002'),
+  40::bigint,'the overridden session is full at forty selections'
+);
 set local role authenticated;
-select set_config('request.jwt.claim.sub','20000000-0000-4000-8000-000000000002',true);
-select set_config('request.jwt.claims','{"sub":"20000000-0000-4000-8000-000000000002","email":"two@student.alej.cz"}',true);
-select public.set_student_class('Kvinta A');
-select public.select_session('10000000-0000-4000-8000-000000005001');
 select set_config('request.jwt.claim.sub','20000000-0000-4000-8000-000000000003',true);
 select set_config('request.jwt.claims','{"sub":"20000000-0000-4000-8000-000000000003","email":"three@student.alej.cz"}',true);
 select public.set_student_class('Kvinta B');
 select public.select_session('10000000-0000-4000-8000-000000005003');
-select throws_ok($$select public.select_session('10000000-0000-4000-8000-000000005001')$$,'P0001','SWITCH_TARGET_FULL','full target room rejects switch');
-select is((select session_id from public.student_selections where student_id='20000000-0000-4000-8000-000000000003' and block_id='10000000-0000-4000-8000-000000001001'),'10000000-0000-4000-8000-000000005003'::uuid,'failed switch retains old selection');
+select throws_ok($$select public.select_session('10000000-0000-4000-8000-000000005002')$$,'P0001','SWITCH_TARGET_FULL','full forty-seat override rejects switch');
+select is((select session_id from public.student_selections where student_id='20000000-0000-4000-8000-000000000003' and block_id='10000000-0000-4000-8000-000000001001'),'10000000-0000-4000-8000-000000005003'::uuid,'failed switch into forty-seat session retains old selection');
 
 reset role;
 update public.events set registration_close_at=now()-interval '1 second' where id='10000000-0000-4000-8000-000000000001';

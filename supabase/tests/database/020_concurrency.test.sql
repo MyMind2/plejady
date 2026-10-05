@@ -7,17 +7,19 @@ select ('30000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'authenticated',
 insert into public.student_profiles(user_id,email,display_name,class_name)
 select id,email,split_part(email,'@',1),'Kvinta A' from auth.users
 where id between '30000000-0000-4000-8000-000000000001'::uuid and '30000000-0000-4000-8000-000000000064'::uuid;
-update public.rooms set capacity=1 where id='10000000-0000-4000-8000-000000002001';
 update public.rooms set capacity=3 where id='10000000-0000-4000-8000-000000002002';
+insert into public.student_selections(student_id,block_id,session_id)
+select id,'10000000-0000-4000-8000-000000001001','10000000-0000-4000-8000-000000005002' from auth.users
+where id between '30000000-0000-4000-8000-000000000001'::uuid and '30000000-0000-4000-8000-000000000039'::uuid;
 commit;
 
 select dblink_connect('seat_a','host=supabase_db_plejady port=5432 dbname=postgres user=supabase_admin password=postgres sslmode=disable');
 select dblink_connect('seat_b','host=supabase_db_plejady port=5432 dbname=postgres user=supabase_admin password=postgres sslmode=disable');
-select dblink_send_query('seat_a',$$do $body$ begin execute 'set local role authenticated'; perform set_config('request.jwt.claim.sub','30000000-0000-4000-8000-000000000001',true); perform set_config('request.jwt.claims','{"sub":"30000000-0000-4000-8000-000000000001","email":"race1@student.alej.cz"}',true); perform pg_sleep(0.2); begin perform public.select_session('10000000-0000-4000-8000-000000005011'); exception when others then null; end; end $body$;$$);
-select dblink_send_query('seat_b',$$do $body$ begin execute 'set local role authenticated'; perform set_config('request.jwt.claim.sub','30000000-0000-4000-8000-000000000002',true); perform set_config('request.jwt.claims','{"sub":"30000000-0000-4000-8000-000000000002","email":"race2@student.alej.cz"}',true); perform pg_sleep(0.2); begin perform public.select_session('10000000-0000-4000-8000-000000005011'); exception when others then null; end; end $body$;$$);
+select dblink_send_query('seat_a',$$do $body$ begin execute 'set local role authenticated'; perform set_config('request.jwt.claim.sub','30000000-0000-4000-8000-000000000040',true); perform set_config('request.jwt.claims','{"sub":"30000000-0000-4000-8000-000000000040","email":"race40@student.alej.cz"}',true); perform pg_sleep(0.2); begin perform public.select_session('10000000-0000-4000-8000-000000005002'); exception when others then null; end; end $body$;$$);
+select dblink_send_query('seat_b',$$do $body$ begin execute 'set local role authenticated'; perform set_config('request.jwt.claim.sub','30000000-0000-4000-8000-000000000041',true); perform set_config('request.jwt.claims','{"sub":"30000000-0000-4000-8000-000000000041","email":"race41@student.alej.cz"}',true); perform pg_sleep(0.2); begin perform public.select_session('10000000-0000-4000-8000-000000005002'); exception when others then null; end; end $body$;$$);
 select * from dblink_get_result('seat_a') as t(result text); select * from dblink_get_result('seat_b') as t(result text);
 select * from dblink_get_result('seat_a') as t(result text); select * from dblink_get_result('seat_b') as t(result text);
-select is((select count(*) from public.student_selections where session_id='10000000-0000-4000-8000-000000005011'),1::bigint,'concurrent students competing for one seat produce exactly one registration');
+select is((select count(*) from public.student_selections where session_id='10000000-0000-4000-8000-000000005002'),40::bigint,'concurrent attempts for the final override seat stop at forty');
 select dblink_disconnect('seat_a'); select dblink_disconnect('seat_b');
 
 -- Pre-fill two of three places, then start ten transactions for the final place.
@@ -48,4 +50,4 @@ select * from finish();
 
 delete from public.guests where event_id='10000000-0000-4000-8000-000000000001' and normalized_email like 'guest%@example.test';
 delete from auth.users where id between '30000000-0000-4000-8000-000000000001'::uuid and '30000000-0000-4000-8000-000000000064'::uuid;
-update public.rooms set capacity=case when id='10000000-0000-4000-8000-000000002005' then 60 else 30 end where event_id='10000000-0000-4000-8000-000000000001';
+update public.rooms set capacity=80 where event_id='10000000-0000-4000-8000-000000000001';
