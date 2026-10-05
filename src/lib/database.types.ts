@@ -336,18 +336,21 @@ export type Database = {
       };
       student_profiles: {
         Row: {
+          class_name: string | null;
           created_at: string;
           display_name: string;
           email: string;
           user_id: string;
         };
         Insert: {
+          class_name?: string | null;
           created_at?: string;
           display_name?: string;
           email: string;
           user_id: string;
         };
         Update: {
+          class_name?: string | null;
           created_at?: string;
           display_name?: string;
           email?: string;
@@ -456,6 +459,7 @@ export type Database = {
           session_id: string;
         }[];
       };
+      set_student_class: { Args: { p_class_name: string }; Returns: undefined };
     };
     Enums: {
       app_role: "student" | "admin" | "owner";

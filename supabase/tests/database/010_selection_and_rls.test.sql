@@ -1,5 +1,5 @@
 begin;
-select plan(31);
+select plan(39);
 select is((select count(*) from public.blocks where event_id='10000000-0000-4000-8000-000000000001'),4::bigint,'seed has exactly four blocks');
 select is((select count(*) from public.sessions where event_id='10000000-0000-4000-8000-000000000001'),20::bigint,'seed has exactly twenty sessions');
 select is((select min(session_count)=5 and max(session_count)=5 from (select count(*) session_count from public.sessions where event_id='10000000-0000-4000-8000-000000000001' group by block_id) counts),true,'each seeded block has five sessions');
@@ -80,6 +80,39 @@ insert into auth.users (id,aud,role,email,encrypted_password,email_confirmed_at,
 ('20000000-0000-4000-8000-000000000003','authenticated','authenticated','three@student.alej.cz','',now(),'{}','{}',now(),now()),
 ('20000000-0000-4000-8000-000000000006','authenticated','authenticated','outside@gmail.com','',now(),'{}','{}',now(),now());
 
+insert into public.student_profiles(user_id,email,display_name)
+values
+('20000000-0000-4000-8000-000000000001','one@student.alej.cz','Student One'),
+('20000000-0000-4000-8000-000000000002','two@student.alej.cz','Student Two'),
+('20000000-0000-4000-8000-000000000003','three@student.alej.cz','Student Three');
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub','20000000-0000-4000-8000-000000000001',true);
+select set_config('request.jwt.claims','{"sub":"20000000-0000-4000-8000-000000000001","email":"one@student.alej.cz"}',true);
+select is((select class_name from public.student_profiles where user_id='20000000-0000-4000-8000-000000000001'),null,'existing student profile remains valid without a class');
+select throws_ok(
+  $$select public.select_session('10000000-0000-4000-8000-000000005001')$$,
+  'P0001','CLASS_REQUIRED','student must choose a class before selecting a lecture'
+);
+select lives_ok(
+  $$do $body$ declare class_name text; begin
+    foreach class_name in array array['Kvinta A','Sexta A','Septima A','Oktáva A','Kvinta B','Sexta B','Septima B','Oktáva B','Prvák','Druhák','Třeťák','Čtvrťák']
+    loop perform public.set_student_class(class_name); end loop;
+  end $body$;$$,
+  'all twelve configured classes are accepted'
+);
+select is((select class_name from public.student_profiles where user_id='20000000-0000-4000-8000-000000000001'),'Čtvrťák','student can save their own class');
+select throws_ok(
+  $$select public.set_student_class('Páťák')$$,
+  'P0001','INVALID_CLASS','class RPC rejects a value outside the fixed list'
+);
+select is_empty(
+  $$update public.student_profiles set class_name='Kvinta A' where user_id='20000000-0000-4000-8000-000000000002' returning user_id$$,
+  'student cannot update another student profile directly'
+);
+reset role;
+select is((select class_name from public.student_profiles where user_id='20000000-0000-4000-8000-000000000002'),null,'another student class remains unchanged');
+select col_has_check('public','student_profiles','class_name','student class has a database check constraint');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','20000000-0000-4000-8000-000000000001',true);
 select set_config('request.jwt.claims','{"sub":"20000000-0000-4000-8000-000000000001","email":"one@student.alej.cz"}',true);
@@ -95,9 +128,11 @@ update public.rooms set capacity=1 where id='10000000-0000-4000-8000-00000000200
 set local role authenticated;
 select set_config('request.jwt.claim.sub','20000000-0000-4000-8000-000000000002',true);
 select set_config('request.jwt.claims','{"sub":"20000000-0000-4000-8000-000000000002","email":"two@student.alej.cz"}',true);
+select public.set_student_class('Kvinta A');
 select public.select_session('10000000-0000-4000-8000-000000005001');
 select set_config('request.jwt.claim.sub','20000000-0000-4000-8000-000000000003',true);
 select set_config('request.jwt.claims','{"sub":"20000000-0000-4000-8000-000000000003","email":"three@student.alej.cz"}',true);
+select public.set_student_class('Kvinta B');
 select public.select_session('10000000-0000-4000-8000-000000005003');
 select throws_ok($$select public.select_session('10000000-0000-4000-8000-000000005001')$$,'P0001','SWITCH_TARGET_FULL','full target room rejects switch');
 select is((select session_id from public.student_selections where student_id='20000000-0000-4000-8000-000000000003' and block_id='10000000-0000-4000-8000-000000001001'),'10000000-0000-4000-8000-000000005003'::uuid,'failed switch retains old selection');

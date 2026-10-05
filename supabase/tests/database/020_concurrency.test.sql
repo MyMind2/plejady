@@ -4,6 +4,9 @@ begin;
 select plan(4);
 insert into auth.users (id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
 select ('30000000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'authenticated','authenticated',format('race%s@student.alej.cz',n),'',now(),'{}','{}',now(),now() from generate_series(1,64) n;
+insert into public.student_profiles(user_id,email,display_name,class_name)
+select id,email,split_part(email,'@',1),'Kvinta A' from auth.users
+where id between '30000000-0000-4000-8000-000000000001'::uuid and '30000000-0000-4000-8000-000000000064'::uuid;
 update public.rooms set capacity=1 where id='10000000-0000-4000-8000-000000002001';
 update public.rooms set capacity=3 where id='10000000-0000-4000-8000-000000002002';
 commit;
