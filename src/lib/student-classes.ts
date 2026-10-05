@@ -2,16 +2,16 @@ import { z } from "zod";
 
 export const studentClasses = [
   "Kvinta A",
-  "Sexta A",
-  "Septima A",
-  "Oktáva A",
   "Kvinta B",
-  "Sexta B",
-  "Septima B",
-  "Oktáva B",
   "Prvák",
+  "Sexta A",
+  "Sexta B",
   "Druhák",
+  "Septima A",
+  "Septima B",
   "Třeťák",
+  "Oktáva A",
+  "Oktáva B",
   "Čtvrťák",
 ] as const;
 
