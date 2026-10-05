@@ -157,7 +157,7 @@ export default function Login() {
           Použijte svůj školní účet @student.alej.cz a sestavte si svůj program.
         </p>
 
-        <button
+        {/* <button
           type="button"
           onClick={signInWithGoogle}
           disabled={busy}
@@ -172,7 +172,7 @@ export default function Login() {
           <span aria-hidden="true" className="h-px flex-1 bg-slate-200" />
           <span className="text-sm font-medium text-muted">nebo</span>
           <span aria-hidden="true" className="h-px flex-1 bg-slate-200" />
-        </div>
+        </div> */}
 
         {state.step === "email" ? (
           <form onSubmit={sendOtp} className="space-y-4">
